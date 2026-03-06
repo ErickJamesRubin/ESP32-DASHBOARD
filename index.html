@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Weather Station Dashboard</title>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- External CSS -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase SDK (v9 compat — works with plain HTML) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div class="loading">
+    <div class="loader"></div>
+  </div>
+
+  <!-- Background Particles -->
+  <div class="particles" id="particles"></div>
+
+  <div class="container">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">HI</div>
+      <h1>WEATHER STATION DASHBOARD</h1>
+      <p class="subtitle">ESP32 + DHT11 · Live Firebase IoT Monitoring</p>
+    </header>
+
+    <!-- Firebase Connection Status -->
+    <div class="firebase-status">
+      <div class="firebase-dot" id="fbDot"></div>
+      <span id="fbStatusText">Connecting to Firebase...</span>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="stats-grid">
+
+      <div class="stat-card">
+        <div class="stat-icon temp-icon">🌡️</div>
+        <div class="stat-label">Temperature</div>
+        <div class="stat-value">
+          <span id="temperature">--</span>
+          <span class="stat-unit">°C</span>
+        </div>
+        <div class="stat-change change-up">
+          <span>↑</span>
+          <span id="temp-change">--</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon humidity-icon">💧</div>
+        <div class="stat-label">Humidity</div>
+        <div class="stat-value">
+          <span id="humidity">--</span>
+          <span class="stat-unit">%</span>
+        </div>
+        <div class="stat-change change-down">
+          <span>↓</span>
+          <span id="humidity-change">--</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon heat-icon">🔥</div>
+        <div class="stat-label">Heat Index</div>
+        <div class="stat-value">
+          <span id="heatIndex">--</span>
+          <span class="stat-unit">°C</span>
+        </div>
+        <div class="stat-change">
+          <span id="comfort-level">--</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon status-icon">✓</div>
+        <div class="stat-label">System Status</div>
+        <div class="stat-value">
+          <span style="font-size: 1.5rem;" id="systemStatus">WAITING</span>
+        </div>
+        <div class="stat-change">
+          <span>Last update: <span id="lastUpdate">--</span></span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-section">
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Temperature Trend</h3>
+          <span class="chart-period">Last 20 Readings</span>
+        </div>
+        <canvas id="tempChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Humidity Trend</h3>
+          <span class="chart-period">Last 20 Readings</span>
+        </div>
+        <canvas id="humidityChart"></canvas>
+      </div>
+
+    </div>
+
+    <!-- Device Info -->
+    <div class="device-info">
+      <div class="device-header">
+        <div class="device-status"></div>
+        <h3 class="device-title">Device Information</h3>
+      </div>
+      <div class="device-grid">
+        <div class="device-item">
+          <span class="device-label">Microcontroller</span>
+          <span class="device-value">ESP32</span>
+        </div>
+        <div class="device-item">
+          <span class="device-label">Sensor</span>
+          <span class="device-value">DHT11</span>
+        </div>
+        <div class="device-item">
+          <span class="device-label">Firmware</span>
+          <span class="device-value">v2.1.0</span>
+        </div>
+        <div class="device-item">
+          <span class="device-label">Uptime</span>
+          <span class="device-value" id="uptime">--</span>
+        </div>
+        <div class="device-item">
+          <span class="device-label">WiFi Signal</span>
+          <span class="device-value" id="wifiSignal">--</span>
+        </div>
+        <div class="device-item">
+          <span class="device-label">IP Address</span>
+          <span class="device-value" id="ipAddress">--</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <!-- External JS (must be last so DOM is ready) -->
+  <script src="script.js"></script>
+
+</body>
+</html>
