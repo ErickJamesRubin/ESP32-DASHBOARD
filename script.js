@@ -1,12 +1,10 @@
 // ============================================================
 // script.js — ESP32 Weather Station Dashboard
-// Firebase Realtime Database listener + Chart.js rendering
+// Firebase + Chart.js + CSV Export + Timestamp + Connection UI
 // ============================================================
 
 // ============================================================
 // 🔥 FIREBASE CONFIGURATION
-// Replace these values with YOUR Firebase project credentials.
-// Firebase Console → Project Settings → Your Apps → Web App
 // ============================================================
 const firebaseConfig = {
   apiKey:            "AIzaSyDaCwd669Af_0UBOfdmy_fmstROGkTs4",
@@ -18,24 +16,30 @@ const firebaseConfig = {
   appId:             "1:650143484331:web:fb11ca0c9c31fe69c86ee"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // ============================================================
-// Firebase status indicator
+// CSV Data Log — stores every reading for export
 // ============================================================
-const fbDot  = document.getElementById('fbDot');
-const fbText = document.getElementById('fbStatusText');
+const dataLog = [];   // { timestamp, temperature, humidity, heatIndex, comfort }
 
-function setFirebaseStatus(state) {
-  fbDot.className = 'firebase-dot ' + state;
-  if (state === 'connected') {
-    fbText.textContent = '🔥 Firebase Connected — Live Data';
-  } else if (state === 'error') {
-    fbText.textContent = '⚠️ Firebase Error — Check Config';
+// ============================================================
+// Connection indicator
+// ============================================================
+const connDot   = document.getElementById('connDot');
+const connLabel = document.getElementById('connLabel');
+const connBadge = document.getElementById('connectionBadge');
+
+function setConnection(online) {
+  if (online) {
+    connDot.className   = 'connection-dot online';
+    connLabel.textContent = 'ONLINE';
+    connBadge.className = 'connection-badge online';
   } else {
-    fbText.textContent = 'Connecting to Firebase...';
+    connDot.className   = 'connection-dot offline';
+    connLabel.textContent = 'OFFLINE';
+    connBadge.className = 'connection-badge offline';
   }
 }
 
@@ -53,12 +57,18 @@ for (let i = 0; i < 50; i++) {
 }
 
 // ============================================================
-// Chart.js — rolling 20-point history
+// Chart.js — animated, rolling 20-point history
 // ============================================================
 const MAX_POINTS    = 20;
 let tempHistory     = Array(MAX_POINTS).fill(null);
 let humidityHistory = Array(MAX_POINTS).fill(null);
 let timeLabels      = Array(MAX_POINTS).fill('');
+
+// Shared chart animation config
+const chartAnimation = {
+  duration: 600,
+  easing: 'easeInOutQuart'
+};
 
 // Temperature Chart
 const tempCtx   = document.getElementById('tempChart').getContext('2d');
@@ -70,27 +80,31 @@ const tempChart = new Chart(tempCtx, {
       label: 'Temperature (°C)',
       data: tempHistory,
       borderColor: '#ff6b6b',
-      backgroundColor: 'rgba(255, 107, 107, 0.1)',
-      borderWidth: 3,
-      fill: true,
-      tension: 0.4,
-      pointRadius: 0,
-      pointHoverRadius: 6
+      backgroundColor: (ctx) => {
+        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
+        gradient.addColorStop(0, 'rgba(255,107,107,0.35)');
+        gradient.addColorStop(1, 'rgba(255,107,107,0)');
+        return gradient;
+      },
+      borderWidth: 3, fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#ff6b6b',
+      pointHoverRadius: 7, pointHoverBackgroundColor: '#fff',
+      pointBorderColor: '#ff6b6b', pointBorderWidth: 2,
     }]
   },
   options: {
-    responsive: true,
-    maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: true,
+    animation: chartAnimation,
     plugins: { legend: { display: false } },
     scales: {
       y: {
         beginAtZero: false,
         grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8' }
+        ticks: { color: '#94a3b8', font: { family: 'Rajdhani', size: 12 } }
       },
       x: {
-        grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8', maxTicksLimit: 6 }
+        grid:  { color: 'rgba(255,255,255,0.03)' },
+        ticks: { color: '#94a3b8', maxTicksLimit: 6, font: { family: 'Rajdhani', size: 11 } }
       }
     }
   }
@@ -106,40 +120,45 @@ const humidityChart = new Chart(humidityCtx, {
       label: 'Humidity (%)',
       data: humidityHistory,
       borderColor: '#4facfe',
-      backgroundColor: 'rgba(79, 172, 254, 0.1)',
-      borderWidth: 3,
-      fill: true,
-      tension: 0.4,
-      pointRadius: 0,
-      pointHoverRadius: 6
+      backgroundColor: (ctx) => {
+        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
+        gradient.addColorStop(0, 'rgba(79,172,254,0.35)');
+        gradient.addColorStop(1, 'rgba(79,172,254,0)');
+        return gradient;
+      },
+      borderWidth: 3, fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#4facfe',
+      pointHoverRadius: 7, pointHoverBackgroundColor: '#fff',
+      pointBorderColor: '#4facfe', pointBorderWidth: 2,
     }]
   },
   options: {
-    responsive: true,
-    maintainAspectRatio: true,
+    responsive: true, maintainAspectRatio: true,
+    animation: chartAnimation,
     plugins: { legend: { display: false } },
     scales: {
       y: {
         beginAtZero: false,
         grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8' }
+        ticks: { color: '#94a3b8', font: { family: 'Rajdhani', size: 12 } }
       },
       x: {
-        grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8', maxTicksLimit: 6 }
+        grid:  { color: 'rgba(255,255,255,0.03)' },
+        ticks: { color: '#94a3b8', maxTicksLimit: 6, font: { family: 'Rajdhani', size: 11 } }
       }
     }
   }
 });
 
 // ============================================================
-// State tracking
+// State
 // ============================================================
 let prevTemp      = null;
 let prevHumidity  = null;
 let uptimeSeconds = 0;
+let recordCount   = 0;
 
-// Local uptime counter (resets on page reload)
+// Local uptime counter
 setInterval(() => {
   uptimeSeconds++;
   const h = Math.floor(uptimeSeconds / 3600);
@@ -149,20 +168,84 @@ setInterval(() => {
 }, 1000);
 
 // ============================================================
+// Helper — format full timestamp
+// ============================================================
+function formatTimestamp(date) {
+  const mm  = String(date.getMonth() + 1).padStart(2, '0');
+  const dd  = String(date.getDate()).padStart(2, '0');
+  const yy  = date.getFullYear();
+  const hh  = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const ss  = String(date.getSeconds()).padStart(2, '0');
+  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+  const hh12 = String(date.getHours() % 12 || 12).padStart(2, '0');
+  return `${mm}/${dd}/${yy}  ${hh12}:${min}:${ss} ${ampm}`;
+}
+
+function formatCSVTimestamp(date) {
+  const mm  = String(date.getMonth() + 1).padStart(2, '0');
+  const dd  = String(date.getDate()).padStart(2, '0');
+  const yy  = date.getFullYear();
+  const hh  = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const ss  = String(date.getSeconds()).padStart(2, '0');
+  return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+}
+
+// ============================================================
+// CSV Export
+// ============================================================
+function exportCSV() {
+  if (dataLog.length === 0) {
+    alert('No data to export yet. Wait for at least one reading from the ESP32.');
+    return;
+  }
+
+  const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)', 'Heat Index (°C)', 'Comfort Level'];
+  const rows = dataLog.map(r =>
+    [r.timestamp, r.temperature, r.humidity, r.heatIndex, r.comfort].join(',')
+  );
+
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+
+  const now      = new Date();
+  const filename = `weather_data_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.csv`;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // Button feedback animation
+  const btn = document.getElementById('exportBtn');
+  btn.textContent = '✓ Exported!';
+  btn.style.borderColor = '#43e97b';
+  btn.style.color = '#43e97b';
+  setTimeout(() => {
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV`;
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }, 2500);
+}
+
+// ============================================================
 // 🔥 Firebase Realtime Listener
-// Path: /sensor/current  ← must match what your ESP32 writes to
 // ============================================================
 db.ref('/sensor/current').on(
   'value',
   (snapshot) => {
-    setFirebaseStatus('connected');
+    setConnection(true);
     const data = snapshot.val();
     if (!data) return;
 
     const temp     = parseFloat(data.temperature);
     const humidity = parseFloat(data.humidity);
+    const now      = new Date();
 
-    // ── Temperature card ──────────────────────────────────────
+    // ── Temperature ───────────────────────────────────────────
     document.getElementById('temperature').textContent = temp.toFixed(1);
     if (prevTemp !== null) {
       const delta = temp - prevTemp;
@@ -173,7 +256,7 @@ db.ref('/sensor/current').on(
     }
     prevTemp = temp;
 
-    // ── Humidity card ─────────────────────────────────────────
+    // ── Humidity ──────────────────────────────────────────────
     document.getElementById('humidity').textContent = humidity.toFixed(1);
     if (prevHumidity !== null) {
       const delta = humidity - prevHumidity;
@@ -184,17 +267,17 @@ db.ref('/sensor/current').on(
     }
     prevHumidity = humidity;
 
-    // ── Heat Index (Steadman formula) ─────────────────────────
+    // ── Heat Index ────────────────────────────────────────────
     const hi =
       -8.78469475556
-      + 1.61139411       * temp
-      + 2.33854883889    * humidity
-      + (-0.14611605)    * temp * humidity
-      + (-0.012308094)   * temp * temp
-      + (-0.0164248277778) * humidity * humidity
-      + 0.002211732      * temp * temp * humidity
-      + 0.00072546       * temp * humidity * humidity
-      + (-0.000003582)   * temp * temp * humidity * humidity;
+      + 1.61139411        * temp
+      + 2.33854883889     * humidity
+      + (-0.14611605)     * temp * humidity
+      + (-0.012308094)    * temp * temp
+      + (-0.0164248277778)* humidity * humidity
+      + 0.002211732       * temp * temp * humidity
+      + 0.00072546        * temp * humidity * humidity
+      + (-0.000003582)    * temp * temp * humidity * humidity;
 
     const heatIndex = isNaN(hi) ? temp : hi;
     document.getElementById('heatIndex').textContent = heatIndex.toFixed(1);
@@ -206,17 +289,32 @@ db.ref('/sensor/current').on(
     else if (heatIndex < 20) comfort = '❄️ Cool';
     document.getElementById('comfort-level').textContent = comfort;
 
-    // ── System Status ─────────────────────────────────────────
+    // ── System status ─────────────────────────────────────────
     document.getElementById('systemStatus').textContent = 'ONLINE';
-    document.getElementById('lastUpdate').textContent   = new Date().toLocaleTimeString();
+    document.getElementById('lastUpdate').textContent   = now.toLocaleTimeString();
 
-    // ── Optional device fields (sent by ESP32) ────────────────
+    // ── Full timestamp ────────────────────────────────────────
+    document.getElementById('fullTimestamp').textContent = formatTimestamp(now);
+
+    // ── Record count ──────────────────────────────────────────
+    recordCount++;
+    document.getElementById('recordCount').textContent = recordCount;
+
+    // ── Log to CSV buffer ─────────────────────────────────────
+    dataLog.push({
+      timestamp:   formatCSVTimestamp(now),
+      temperature: temp.toFixed(1),
+      humidity:    humidity.toFixed(1),
+      heatIndex:   heatIndex.toFixed(1),
+      comfort:     comfort.replace(/[^\w\s]/gi, '') // strip emoji for CSV
+    });
+
+    // ── Optional device fields ────────────────────────────────
     if (data.rssi) document.getElementById('wifiSignal').textContent = data.rssi + ' dBm';
     if (data.ip)   document.getElementById('ipAddress').textContent  = data.ip;
 
-    // ── Update Charts ─────────────────────────────────────────
-    const now   = new Date();
-    const label = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+    // ── Charts ────────────────────────────────────────────────
+    const label = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
 
     tempHistory.shift();     tempHistory.push(temp);
     humidityHistory.shift(); humidityHistory.push(humidity);
@@ -226,7 +324,7 @@ db.ref('/sensor/current').on(
     humidityChart.update();
   },
   (error) => {
-    setFirebaseStatus('error');
+    setConnection(false);
     console.error('Firebase error:', error);
     document.getElementById('systemStatus').textContent = 'ERROR';
   }
