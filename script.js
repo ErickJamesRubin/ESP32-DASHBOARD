@@ -1,6 +1,6 @@
 // ============================================================
-// script.js — ESP32 Weather Station Dashboard
-// Firebase + Chart.js + CSV Export + Timestamp + Connection UI
+// script.js — IMPERIAL WEATHER COMMAND
+// Firebase + Chart.js + Imperial March (Web Audio API)
 // ============================================================
 
 // ============================================================
@@ -20,176 +20,328 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // ============================================================
-// CSV Data Log — stores every reading for export
+// STARFIELD
 // ============================================================
-const dataLog = [];   // { timestamp, temperature, humidity, heatIndex, comfort }
+(function initStarfield() {
+  const canvas = document.getElementById('starfield');
+  const ctx    = canvas.getContext('2d');
+  let stars    = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  function makeStars(n) {
+    stars = [];
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.2 + 0.2,
+        a: Math.random(),
+        speed: Math.random() * 0.003 + 0.001,
+        drift: (Math.random() - 0.5) * 0.05
+      });
+    }
+  }
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.a += s.speed;
+      s.x += s.drift;
+      if (s.x < 0) s.x = canvas.width;
+      if (s.x > canvas.width) s.x = 0;
+      const alpha = (Math.sin(s.a) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha * 0.7})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', () => { resize(); makeStars(200); });
+  resize(); makeStars(200); draw();
+})();
 
 // ============================================================
-// Connection indicator
+// IMPERIAL MARCH — Web Audio API synthesizer
 // ============================================================
-const connDot   = document.getElementById('connDot');
-const connLabel = document.getElementById('connLabel');
-const connBadge = document.getElementById('connectionBadge');
+let audioCtx   = null;
+let marchNodes = [];
+let marchPlaying = false;
+let marchLoop  = null;
 
-function setConnection(online) {
-  if (online) {
-    connDot.className   = 'connection-dot online';
-    connLabel.textContent = 'ONLINE';
-    connBadge.className = 'connection-badge online';
+// Imperial March note sequence (frequency, duration in seconds)
+const MARCH_NOTES = [
+  // Opening theme
+  [392.0,0.42],[392.0,0.42],[392.0,0.42],[311.1,0.28],[466.2,0.14],
+  [392.0,0.42],[311.1,0.28],[466.2,0.14],[392.0,0.84],
+  [587.3,0.42],[587.3,0.42],[587.3,0.42],[622.3,0.28],[466.2,0.14],
+  [369.9,0.42],[311.1,0.28],[466.2,0.14],[392.0,0.84],
+  // Second phrase
+  [784.0,0.42],[392.0,0.21],[392.0,0.21],[784.0,0.42],[739.9,0.28],[698.5,0.14],
+  [659.3,0.14],[622.3,0.14],[659.3,0.28],[0,0.28],[415.3,0.28],[554.4,0.42],[523.3,0.28],[493.9,0.14],
+  [466.2,0.14],[440.0,0.14],[466.2,0.28],[0,0.28],[311.1,0.28],[369.9,0.42],[311.1,0.28],[369.9,0.42],
+  [466.2,0.42],[392.0,0.28],[466.2,0.14],[587.3,0.84]
+];
+
+function playImperialMarch() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  let t = audioCtx.currentTime + 0.05;
+  marchNodes = [];
+
+  MARCH_NOTES.forEach(([freq, dur]) => {
+    if (freq === 0) { t += dur; return; }
+
+    const osc    = audioCtx.createOscillator();
+    const gain   = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, t);
+    filter.Q.setValueAtTime(1, t);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+    gain.gain.setValueAtTime(0.22, t + dur * 0.7);
+    gain.gain.linearRampToValueAtTime(0, t + dur - 0.02);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(t);
+    osc.stop(t + dur);
+    marchNodes.push(osc);
+    t += dur;
+  });
+
+  // Schedule loop
+  const totalDuration = MARCH_NOTES.reduce((s, [, d]) => s + d, 0);
+  marchLoop = setTimeout(() => {
+    if (marchPlaying) playImperialMarch();
+  }, (totalDuration * 1000));
+}
+
+function stopImperialMarch() {
+  clearTimeout(marchLoop);
+  marchNodes.forEach(n => { try { n.stop(); } catch(e){} });
+  marchNodes = [];
+}
+
+function toggleAudio() {
+  marchPlaying = !marchPlaying;
+  const btn  = document.getElementById('audioBtn');
+  const icon = document.getElementById('audioIcon');
+  const note = document.getElementById('footerNote');
+
+  if (marchPlaying) {
+    playImperialMarch();
+    btn.classList.add('playing');
+    icon.textContent = '🔇';
+    btn.innerHTML = '<span id="audioIcon">🔇</span>&nbsp;STOP MARCH';
+    note.textContent = '♪ Imperial March playing';
   } else {
-    connDot.className   = 'connection-dot offline';
-    connLabel.textContent = 'OFFLINE';
-    connBadge.className = 'connection-badge offline';
+    stopImperialMarch();
+    btn.classList.remove('playing');
+    btn.innerHTML = '<span id="audioIcon">🔊</span>&nbsp;IMPERIAL MARCH';
+    note.textContent = '♪ Imperial March standing by';
   }
 }
 
 // ============================================================
-// Background particles
+// CSV Data Log
 // ============================================================
-const particlesContainer = document.getElementById('particles');
-for (let i = 0; i < 50; i++) {
-  const p = document.createElement('div');
-  p.className = 'particle';
-  p.style.left           = Math.random() * 100 + '%';
-  p.style.top            = Math.random() * 100 + '%';
-  p.style.animationDelay = Math.random() * 20 + 's';
-  particlesContainer.appendChild(p);
+const dataLog = [];
+
+// ============================================================
+// Connection indicator
+// ============================================================
+function setConnection(online) {
+  const badge = document.getElementById('connectionBadge');
+  const label = document.getElementById('connLabel');
+  if (online) {
+    badge.className = 'connection-badge online';
+    label.textContent = 'ONLINE';
+  } else {
+    badge.className = 'connection-badge';
+    label.textContent = 'OFFLINE';
+  }
 }
 
 // ============================================================
-// Chart.js — animated, rolling 20-point history
+// Chart.js setup
 // ============================================================
 const MAX_POINTS    = 20;
 let tempHistory     = Array(MAX_POINTS).fill(null);
 let humidityHistory = Array(MAX_POINTS).fill(null);
 let timeLabels      = Array(MAX_POINTS).fill('');
+let paused          = false;
 
-// Shared chart animation config
-const chartAnimation = {
-  duration: 600,
-  easing: 'easeInOutQuart'
+const chartAnim = { duration: 500, easing: 'easeInOutQuart' };
+
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: true,
+  animation: chartAnim,
+  plugins: { legend: { display: false } },
+  scales: {
+    y: {
+      beginAtZero: false,
+      grid:  { color: 'rgba(204,0,0,0.08)' },
+      ticks: { color: '#888', font: { family: 'Share Tech Mono', size: 11 } }
+    },
+    x: {
+      grid:  { color: 'rgba(204,0,0,0.04)' },
+      ticks: { color: '#888', maxTicksLimit: 6, font: { family: 'Share Tech Mono', size: 10 } }
+    }
+  }
 };
 
-// Temperature Chart
+// Temperature chart
 const tempCtx   = document.getElementById('tempChart').getContext('2d');
 const tempChart = new Chart(tempCtx, {
   type: 'line',
   data: {
-    labels: timeLabels,
+    labels: [...timeLabels],
     datasets: [{
-      label: 'Temperature (°C)',
-      data: tempHistory,
-      borderColor: '#ff6b6b',
-      backgroundColor: (ctx) => {
-        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
-        gradient.addColorStop(0, 'rgba(255,107,107,0.35)');
-        gradient.addColorStop(1, 'rgba(255,107,107,0)');
-        return gradient;
+      label: 'Temp °C', data: [...tempHistory],
+      borderColor: '#ff3333',
+      backgroundColor: ctx => {
+        const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
+        g.addColorStop(0,'rgba(255,51,51,0.4)');
+        g.addColorStop(1,'rgba(255,51,51,0)');
+        return g;
       },
-      borderWidth: 3, fill: true, tension: 0.4,
-      pointRadius: 3, pointBackgroundColor: '#ff6b6b',
-      pointHoverRadius: 7, pointHoverBackgroundColor: '#fff',
-      pointBorderColor: '#ff6b6b', pointBorderWidth: 2,
+      borderWidth: 2.5, fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#ff3333',
+      pointHoverRadius: 6, pointHoverBackgroundColor: '#fff',
+      pointBorderColor: '#ff3333', pointBorderWidth: 1.5,
     }]
+  },
+  options: { ...chartDefaults }
+});
+
+// Humidity chart
+const humCtx   = document.getElementById('humidityChart').getContext('2d');
+const humChart = new Chart(humCtx, {
+  type: 'line',
+  data: {
+    labels: [...timeLabels],
+    datasets: [{
+      label: 'Humidity %', data: [...humidityHistory],
+      borderColor: '#ffe81f',
+      backgroundColor: ctx => {
+        const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
+        g.addColorStop(0,'rgba(255,232,31,0.35)');
+        g.addColorStop(1,'rgba(255,232,31,0)');
+        return g;
+      },
+      borderWidth: 2.5, fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#ffe81f',
+      pointHoverRadius: 6, pointHoverBackgroundColor: '#fff',
+      pointBorderColor: '#ffe81f', pointBorderWidth: 1.5,
+    }]
+  },
+  options: { ...chartDefaults }
+});
+
+// Combined chart
+const combCtx   = document.getElementById('combinedChart').getContext('2d');
+const combChart = new Chart(combCtx, {
+  type: 'line',
+  data: {
+    labels: [...timeLabels],
+    datasets: [
+      {
+        label: 'Temp °C', data: [...tempHistory],
+        borderColor: '#ff3333',
+        backgroundColor: 'rgba(255,51,51,0.08)',
+        borderWidth: 2, fill: false, tension: 0.4,
+        pointRadius: 2, pointBackgroundColor: '#ff3333',
+        yAxisID: 'y',
+      },
+      {
+        label: 'Humidity %', data: [...humidityHistory],
+        borderColor: '#ffe81f',
+        backgroundColor: 'rgba(255,232,31,0.08)',
+        borderWidth: 2, fill: false, tension: 0.4,
+        pointRadius: 2, pointBackgroundColor: '#ffe81f',
+        yAxisID: 'y1',
+      }
+    ]
   },
   options: {
     responsive: true, maintainAspectRatio: true,
-    animation: chartAnimation,
-    plugins: { legend: { display: false } },
+    animation: chartAnim,
+    plugins: {
+      legend: {
+        display: true,
+        labels: { color: '#888', font: { family: 'Share Tech Mono', size: 11 }, boxWidth: 12 }
+      }
+    },
     scales: {
       y: {
-        beginAtZero: false,
-        grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8', font: { family: 'Rajdhani', size: 12 } }
+        beginAtZero: false, position: 'left',
+        grid: { color: 'rgba(255,51,51,0.07)' },
+        ticks: { color: '#ff6644', font: { family: 'Share Tech Mono', size: 11 } }
+      },
+      y1: {
+        beginAtZero: false, position: 'right',
+        grid: { drawOnChartArea: false },
+        ticks: { color: '#ffe81f', font: { family: 'Share Tech Mono', size: 11 } }
       },
       x: {
-        grid:  { color: 'rgba(255,255,255,0.03)' },
-        ticks: { color: '#94a3b8', maxTicksLimit: 6, font: { family: 'Rajdhani', size: 11 } }
+        grid: { color: 'rgba(204,0,0,0.04)' },
+        ticks: { color: '#888', maxTicksLimit: 6, font: { family: 'Share Tech Mono', size: 10 } }
       }
     }
   }
 });
 
-// Humidity Chart
-const humidityCtx   = document.getElementById('humidityChart').getContext('2d');
-const humidityChart = new Chart(humidityCtx, {
-  type: 'line',
-  data: {
-    labels: timeLabels,
-    datasets: [{
-      label: 'Humidity (%)',
-      data: humidityHistory,
-      borderColor: '#4facfe',
-      backgroundColor: (ctx) => {
-        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
-        gradient.addColorStop(0, 'rgba(79,172,254,0.35)');
-        gradient.addColorStop(1, 'rgba(79,172,254,0)');
-        return gradient;
-      },
-      borderWidth: 3, fill: true, tension: 0.4,
-      pointRadius: 3, pointBackgroundColor: '#4facfe',
-      pointHoverRadius: 7, pointHoverBackgroundColor: '#fff',
-      pointBorderColor: '#4facfe', pointBorderWidth: 2,
-    }]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: true,
-    animation: chartAnimation,
-    plugins: { legend: { display: false } },
-    scales: {
-      y: {
-        beginAtZero: false,
-        grid:  { color: 'rgba(255,255,255,0.05)' },
-        ticks: { color: '#94a3b8', font: { family: 'Rajdhani', size: 12 } }
-      },
-      x: {
-        grid:  { color: 'rgba(255,255,255,0.03)' },
-        ticks: { color: '#94a3b8', maxTicksLimit: 6, font: { family: 'Rajdhani', size: 11 } }
-      }
-    }
-  }
-});
+function togglePause() {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  btn.textContent = paused ? '▶ RESUME' : '⏸ PAUSE';
+}
 
 // ============================================================
 // State
 // ============================================================
-let prevTemp      = null;
-let prevHumidity  = null;
+let prevTemp     = null;
+let prevHumidity = null;
 let uptimeSeconds = 0;
-let recordCount   = 0;
+let recordCount  = 0;
 
-// Local uptime counter
 setInterval(() => {
   uptimeSeconds++;
   const h = Math.floor(uptimeSeconds / 3600);
   const m = Math.floor((uptimeSeconds % 3600) / 60);
   const s = uptimeSeconds % 60;
-  document.getElementById('uptime').textContent = `${h}h ${m}m ${s}s`;
+  document.getElementById('uptime').textContent =
+    `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
 }, 1000);
 
 // ============================================================
-// Helper — format full timestamp
+// Helpers
 // ============================================================
-function formatTimestamp(date) {
-  const mm  = String(date.getMonth() + 1).padStart(2, '0');
-  const dd  = String(date.getDate()).padStart(2, '0');
-  const yy  = date.getFullYear();
-  const hh  = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  const ss  = String(date.getSeconds()).padStart(2, '0');
-  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-  const hh12 = String(date.getHours() % 12 || 12).padStart(2, '0');
-  return `${mm}/${dd}/${yy}  ${hh12}:${min}:${ss} ${ampm}`;
+function formatTimestamp(d) {
+  const mm  = String(d.getMonth()+1).padStart(2,'0');
+  const dd  = String(d.getDate()).padStart(2,'0');
+  const yy  = d.getFullYear();
+  const hh  = d.getHours() % 12 || 12;
+  const min = String(d.getMinutes()).padStart(2,'0');
+  const ss  = String(d.getSeconds()).padStart(2,'0');
+  const ap  = d.getHours() >= 12 ? 'PM' : 'AM';
+  return `${mm}/${dd}/${yy}  ${String(hh).padStart(2,'0')}:${min}:${ss} ${ap}`;
 }
-
-function formatCSVTimestamp(date) {
-  const mm  = String(date.getMonth() + 1).padStart(2, '0');
-  const dd  = String(date.getDate()).padStart(2, '0');
-  const yy  = date.getFullYear();
-  const hh  = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  const ss  = String(date.getSeconds()).padStart(2, '0');
-  return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+function formatCSVTimestamp(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} `
+       + `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
 }
 
 // ============================================================
@@ -197,46 +349,38 @@ function formatCSVTimestamp(date) {
 // ============================================================
 function exportCSV() {
   if (dataLog.length === 0) {
-    alert('No data to export yet. Wait for at least one reading from the ESP32.');
+    alert('No data to export yet. Awaiting sensor readings from the ESP32.');
     return;
   }
-
-  const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)', 'Heat Index (°C)', 'Comfort Level'];
+  const headers = ['Timestamp','Temperature (°C)','Humidity (%)','Heat Index (°C)','Comfort Level'];
   const rows = dataLog.map(r =>
     [r.timestamp, r.temperature, r.humidity, r.heatIndex, r.comfort].join(',')
   );
-
-  const csvContent = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
-
-  const now      = new Date();
-  const filename = `weather_data_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.csv`;
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+  const now  = new Date();
+  const fn   = `imperial_weather_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.csv`;
+  const a    = document.createElement('a');
+  a.href = url; a.download = fn; a.click();
   URL.revokeObjectURL(url);
 
-  // Button feedback animation
   const btn = document.getElementById('exportBtn');
-  btn.textContent = '✓ Exported!';
-  btn.style.borderColor = '#43e97b';
-  btn.style.color = '#43e97b';
+  btn.innerHTML = '✓ TRANSMITTED!';
+  btn.style.borderColor = '#00ff41';
+  btn.style.color = '#00ff41';
   setTimeout(() => {
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV`;
-    btn.style.borderColor = '';
-    btn.style.color = '';
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>&nbsp;EXPORT CSV`;
+    btn.style.borderColor = ''; btn.style.color = '';
   }, 2500);
 }
 
 // ============================================================
-// 🔥 Firebase Realtime Listener
+// Firebase Listener
 // ============================================================
 db.ref('/sensor/current').on(
   'value',
-  (snapshot) => {
+  snapshot => {
     setConnection(true);
     const data = snapshot.val();
     if (!data) return;
@@ -245,29 +389,41 @@ db.ref('/sensor/current').on(
     const humidity = parseFloat(data.humidity);
     const now      = new Date();
 
-    // ── Temperature ───────────────────────────────────────────
+    // ── Temperature
     document.getElementById('temperature').textContent = temp.toFixed(1);
     if (prevTemp !== null) {
       const delta = temp - prevTemp;
-      const el    = document.getElementById('temp-change');
-      el.textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1) + '°C';
-      el.parentElement.className = 'stat-change ' + (delta >= 0 ? 'change-up' : 'change-down');
-      el.parentElement.querySelector('span:first-child').textContent = delta >= 0 ? '↑' : '↓';
+      const arrowEl  = document.getElementById('temp-arrow');
+      const changeEl = document.getElementById('temp-change');
+      arrowEl.textContent  = delta >= 0 ? '↑' : '↓';
+      changeEl.textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1) + '°C';
+      document.getElementById('temp-change-wrap').style.color = delta >= 0 ? '#ff3333' : '#4fc3f7';
     }
     prevTemp = temp;
+    // Comfort badge for temp
+    let tempBadge = 'NOMINAL';
+    if      (temp > 38) tempBadge = '🔴 CRITICAL';
+    else if (temp > 35) tempBadge = '🟠 DANGER';
+    else if (temp > 30) tempBadge = '🟡 HOT';
+    else if (temp < 20) tempBadge = '🔵 COLD';
+    document.getElementById('temp-badge').textContent = tempBadge;
 
-    // ── Humidity ──────────────────────────────────────────────
+    // ── Humidity
     document.getElementById('humidity').textContent = humidity.toFixed(1);
     if (prevHumidity !== null) {
       const delta = humidity - prevHumidity;
-      const el    = document.getElementById('humidity-change');
-      el.textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1) + '%';
-      el.parentElement.className = 'stat-change ' + (delta >= 0 ? 'change-up' : 'change-down');
-      el.parentElement.querySelector('span:first-child').textContent = delta >= 0 ? '↑' : '↓';
+      document.getElementById('humidity-arrow').textContent  = delta >= 0 ? '↑' : '↓';
+      document.getElementById('humidity-change').textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1) + '%';
+      document.getElementById('humidity-change-wrap').style.color = delta >= 0 ? '#4fc3f7' : '#ff3333';
     }
     prevHumidity = humidity;
+    let humBadge = 'COMFORTABLE';
+    if      (humidity > 80) humBadge = '💦 VERY HUMID';
+    else if (humidity > 65) humBadge = '💧 HUMID';
+    else if (humidity < 30) humBadge = '🏜 DRY';
+    document.getElementById('humidity-badge').textContent = humBadge;
 
-    // ── Heat Index ────────────────────────────────────────────
+    // ── Heat Index
     const hi =
       -8.78469475556
       + 1.61139411        * temp
@@ -278,54 +434,61 @@ db.ref('/sensor/current').on(
       + 0.002211732       * temp * temp * humidity
       + 0.00072546        * temp * humidity * humidity
       + (-0.000003582)    * temp * temp * humidity * humidity;
-
     const heatIndex = isNaN(hi) ? temp : hi;
     document.getElementById('heatIndex').textContent = heatIndex.toFixed(1);
 
     let comfort = 'Comfortable';
-    if      (heatIndex > 39) comfort = '🔥 Danger';
-    else if (heatIndex > 35) comfort = '🥵 Very Hot';
-    else if (heatIndex > 32) comfort = '☀️ Hot';
-    else if (heatIndex < 20) comfort = '❄️ Cool';
+    if      (heatIndex > 39) comfort = '🔥 LETHAL — EVACUATE';
+    else if (heatIndex > 35) comfort = '🥵 DANGER ZONE';
+    else if (heatIndex > 32) comfort = '☀️ VERY HOT';
+    else if (heatIndex < 20) comfort = '❄️ COOL';
     document.getElementById('comfort-level').textContent = comfort;
 
-    // ── System status ─────────────────────────────────────────
-    document.getElementById('systemStatus').textContent = 'ONLINE';
+    // ── Status
+    document.getElementById('systemStatus').textContent = 'IMPERIAL LINK ACTIVE';
     document.getElementById('lastUpdate').textContent   = now.toLocaleTimeString();
-
-    // ── Full timestamp ────────────────────────────────────────
     document.getElementById('fullTimestamp').textContent = formatTimestamp(now);
 
-    // ── Record count ──────────────────────────────────────────
+    // ── Record count
     recordCount++;
     document.getElementById('recordCount').textContent = recordCount;
 
-    // ── Log to CSV buffer ─────────────────────────────────────
+    // ── Log
     dataLog.push({
       timestamp:   formatCSVTimestamp(now),
       temperature: temp.toFixed(1),
       humidity:    humidity.toFixed(1),
       heatIndex:   heatIndex.toFixed(1),
-      comfort:     comfort.replace(/[^\w\s]/gi, '') // strip emoji for CSV
+      comfort:     comfort.replace(/[^\w\s\-]/gi, '').trim()
     });
 
-    // ── Optional device fields ────────────────────────────────
+    // ── Optional device fields
     if (data.rssi) document.getElementById('wifiSignal').textContent = data.rssi + ' dBm';
     if (data.ip)   document.getElementById('ipAddress').textContent  = data.ip;
 
-    // ── Charts ────────────────────────────────────────────────
-    const label = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    // ── Charts
+    if (!paused) {
+      const label = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+      tempHistory.shift();     tempHistory.push(temp);
+      humidityHistory.shift(); humidityHistory.push(humidity);
+      timeLabels.shift();      timeLabels.push(label);
 
-    tempHistory.shift();     tempHistory.push(temp);
-    humidityHistory.shift(); humidityHistory.push(humidity);
-    timeLabels.shift();      timeLabels.push(label);
+      tempChart.data.labels   = [...timeLabels];
+      tempChart.data.datasets[0].data = [...tempHistory];
+      humChart.data.labels    = [...timeLabels];
+      humChart.data.datasets[0].data = [...humidityHistory];
+      combChart.data.labels   = [...timeLabels];
+      combChart.data.datasets[0].data = [...tempHistory];
+      combChart.data.datasets[1].data = [...humidityHistory];
 
-    tempChart.update();
-    humidityChart.update();
+      tempChart.update();
+      humChart.update();
+      combChart.update();
+    }
   },
-  (error) => {
+  error => {
     setConnection(false);
     console.error('Firebase error:', error);
-    document.getElementById('systemStatus').textContent = 'ERROR';
+    document.getElementById('systemStatus').textContent = 'LINK SEVERED';
   }
 );

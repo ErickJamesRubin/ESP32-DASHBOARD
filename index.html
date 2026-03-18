@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 Weather Station Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <title>IMPERIAL WEATHER COMMAND — ESP32 Station</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
@@ -12,152 +12,215 @@
 </head>
 <body>
 
-  <div class="loading"><div class="loader"></div></div>
-  <div class="particles" id="particles"></div>
+  <!-- LOADING SCREEN -->
+  <div class="loading" id="loadingScreen">
+    <div class="loading-inner">
+      <div class="vader-mask">
+        <svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="60" cy="50" rx="42" ry="48" fill="#111" stroke="#cc0000" stroke-width="1.5"/>
+          <ellipse cx="60" cy="52" rx="30" ry="26" fill="#0a0a0a" stroke="#cc0000" stroke-width="1"/>
+          <ellipse cx="45" cy="44" rx="12" ry="9" fill="#050505" stroke="#ff0000" stroke-width="1.2"/>
+          <ellipse cx="75" cy="44" rx="12" ry="9" fill="#050505" stroke="#ff0000" stroke-width="1.2"/>
+          <ellipse cx="45" cy="44" rx="7" ry="5" fill="#cc0000" opacity="0.6"/>
+          <ellipse cx="75" cy="44" rx="7" ry="5" fill="#cc0000" opacity="0.6"/>
+          <rect x="45" y="62" width="30" height="18" rx="3" fill="#111" stroke="#cc0000" stroke-width="0.8"/>
+          <rect x="48" y="65" width="6" height="4" rx="1" fill="#cc0000" opacity="0.7"/>
+          <rect x="57" y="65" width="6" height="4" rx="1" fill="#cc0000" opacity="0.7"/>
+          <rect x="66" y="65" width="6" height="4" rx="1" fill="#cc0000" opacity="0.7"/>
+          <rect x="48" y="72" width="24" height="2" rx="1" fill="#cc0000" opacity="0.4"/>
+          <path d="M18 50 L18 95 Q18 115 60 120 Q102 115 102 95 L102 50" fill="#0d0d0d" stroke="#cc0000" stroke-width="1.2"/>
+          <path d="M28 90 L92 90" stroke="#cc0000" stroke-width="0.7" opacity="0.5"/>
+          <path d="M24 100 L96 100" stroke="#cc0000" stroke-width="0.7" opacity="0.3"/>
+          <rect x="38" y="82" width="44" height="6" rx="2" fill="#111" stroke="#cc0000" stroke-width="0.8"/>
+          <rect x="40" y="83.5" width="8" height="3" rx="0.5" fill="#cc0000" opacity="0.6"/>
+          <rect x="51" y="83.5" width="8" height="3" rx="0.5" fill="#cc0000" opacity="0.6"/>
+          <rect x="62" y="83.5" width="8" height="3" rx="0.5" fill="#cc0000" opacity="0.6"/>
+          <rect x="73" y="83.5" width="7" height="3" rx="0.5" fill="#cc0000" opacity="0.6"/>
+        </svg>
+      </div>
+      <div class="loading-text">IMPERIAL SYSTEMS INITIALIZING</div>
+      <div class="loading-bar"><div class="loading-fill"></div></div>
+      <div class="loading-sub">Connecting to Galactic Network...</div>
+    </div>
+  </div>
+
+  <!-- SCANLINES OVERLAY -->
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+  <canvas id="starfield" class="starfield"></canvas>
 
   <div class="container">
 
     <!-- ── HEADER ── -->
     <header>
-      <div class="header-top">
-        <!-- Profile Logo with thermometer icon -->
-        <div class="profile-logo">
-          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="20" cy="20" r="20" fill="url(#logoGrad)"/>
-            <!-- Thermometer body -->
-            <rect x="17" y="7" width="6" height="18" rx="3" fill="white" opacity="0.9"/>
-            <!-- Thermometer bulb -->
-            <circle cx="20" cy="27" r="5" fill="white" opacity="0.9"/>
-            <!-- Mercury fill -->
-            <rect x="18.5" y="14" width="3" height="13" rx="1.5" fill="url(#mercuryGrad)"/>
-            <circle cx="20" cy="27" r="3.5" fill="url(#mercuryGrad)"/>
-            <!-- Tick marks -->
-            <line x1="23" y1="12" x2="25" y2="12" stroke="white" stroke-width="1" opacity="0.6"/>
-            <line x1="23" y1="16" x2="25" y2="16" stroke="white" stroke-width="1" opacity="0.6"/>
-            <line x1="23" y1="20" x2="25" y2="20" stroke="white" stroke-width="1" opacity="0.6"/>
-            <defs>
-              <linearGradient id="logoGrad" x1="0" y1="0" x2="40" y2="40">
-                <stop offset="0%" stop-color="#00d4ff"/>
-                <stop offset="100%" stop-color="#ff6b9d"/>
-              </linearGradient>
-              <linearGradient id="mercuryGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#ff6b6b"/>
-                <stop offset="100%" stop-color="#ff3b3b"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
+      <div class="imperial-logo">
+        <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="30" cy="30" r="28" fill="none" stroke="#cc0000" stroke-width="1.5"/>
+          <circle cx="30" cy="30" r="20" fill="none" stroke="#cc0000" stroke-width="1"/>
+          <circle cx="30" cy="30" r="6" fill="#cc0000"/>
+          <line x1="30" y1="2" x2="30" y2="10" stroke="#cc0000" stroke-width="1.5"/>
+          <line x1="30" y1="50" x2="30" y2="58" stroke="#cc0000" stroke-width="1.5"/>
+          <line x1="2" y1="30" x2="10" y2="30" stroke="#cc0000" stroke-width="1.5"/>
+          <line x1="50" y1="30" x2="58" y2="30" stroke="#cc0000" stroke-width="1.5"/>
+          <line x1="9.4" y1="9.4" x2="15.5" y2="15.5" stroke="#cc0000" stroke-width="1"/>
+          <line x1="44.5" y1="44.5" x2="50.6" y2="50.6" stroke="#cc0000" stroke-width="1"/>
+          <line x1="50.6" y1="9.4" x2="44.5" y2="15.5" stroke="#cc0000" stroke-width="1"/>
+          <line x1="15.5" y1="44.5" x2="9.4" y2="50.6" stroke="#cc0000" stroke-width="1"/>
+        </svg>
+      </div>
 
-        <div class="header-text">
-          <h1>WEATHER STATION DASHBOARD</h1>
-          <p class="subtitle">ESP32 + DHT11 · Live Firebase IoT Monitoring</p>
-          <p class="description">Real-time temperature &amp; humidity monitoring powered by ESP32 microcontroller and Firebase cloud database. Data updates every 3 seconds.</p>
-        </div>
+      <div class="header-center">
+        <div class="header-eyebrow">GALACTIC EMPIRE · IMPERIAL METEOROLOGICAL DIVISION</div>
+        <h1>IMPERIAL WEATHER COMMAND</h1>
+        <p class="subtitle">ESP32 + DHT11 — GALACTIC OUTPOST · LIVE</p>
+      </div>
 
-        <!-- Connection indicator top-right -->
-        <div class="connection-badge" id="connectionBadge">
-          <div class="connection-ring"></div>
-          <div class="connection-dot" id="connDot"></div>
-          <span id="connLabel">OFFLINE</span>
-        </div>
+      <div class="connection-badge" id="connectionBadge">
+        <div class="conn-pulse"></div>
+        <span id="connLabel">OFFLINE</span>
       </div>
     </header>
 
-    <!-- ── STAT CARDS ── -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon temp-icon">🌡️</div>
-        <div class="stat-label">Temperature</div>
-        <div class="stat-value"><span id="temperature">--</span><span class="stat-unit">°C</span></div>
-        <div class="stat-change change-up"><span>↑</span><span id="temp-change">--</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon humidity-icon">💧</div>
-        <div class="stat-label">Humidity</div>
-        <div class="stat-value"><span id="humidity">--</span><span class="stat-unit">%</span></div>
-        <div class="stat-change change-down"><span>↓</span><span id="humidity-change">--</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon heat-icon">🔥</div>
-        <div class="stat-label">Heat Index</div>
-        <div class="stat-value"><span id="heatIndex">--</span><span class="stat-unit">°C</span></div>
-        <div class="stat-change"><span id="comfort-level">--</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon status-icon">✓</div>
-        <div class="stat-label">System Status</div>
-        <div class="stat-value"><span style="font-size:1.4rem;" id="systemStatus">WAITING</span></div>
-        <div class="stat-change"><span>Updated: <span id="lastUpdate">--</span></span></div>
+    <!-- ── TICKER ── -->
+    <div class="ticker-wrap">
+      <div class="ticker-track">
+        <span>★ IMPERIAL WEATHER STATION ACTIVE ★ THE FORCE IS STRONG WITH THIS SENSOR ★ MONITORING ATMOSPHERIC CONDITIONS FOR THE EMPEROR ★ DHT11 ONLINE ★ FIREBASE UPLINK ESTABLISHED ★ TEMPERATURE DATA STREAMING ★ HUMIDITY LEVELS ASSESSED ★ MAY THE DATA BE WITH YOU ★ IMPERIAL WEATHER STATION ACTIVE ★ THE FORCE IS STRONG WITH THIS SENSOR ★ MONITORING ATMOSPHERIC CONDITIONS FOR THE EMPEROR ★ DHT11 ONLINE ★ FIREBASE UPLINK ESTABLISHED ★ TEMPERATURE DATA STREAMING ★ HUMIDITY LEVELS ASSESSED ★ MAY THE DATA BE WITH YOU ★</span>
       </div>
     </div>
 
-    <!-- ── TIMESTAMP + EXPORT BAR ── -->
+    <!-- ── STAT CARDS ── -->
+    <div class="stats-grid">
+      <div class="stat-card temp-card">
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+        <div class="stat-icon">🌡️</div>
+        <div class="stat-label">TEMPERATURE</div>
+        <div class="stat-value"><span id="temperature">--</span><span class="stat-unit">°C</span></div>
+        <div class="stat-badge" id="temp-badge">--</div>
+        <div class="stat-delta" id="temp-change-wrap"><span id="temp-arrow">—</span>&nbsp;<span id="temp-change">--</span></div>
+      </div>
+
+      <div class="stat-card humidity-card">
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+        <div class="stat-icon">💧</div>
+        <div class="stat-label">HUMIDITY</div>
+        <div class="stat-value"><span id="humidity">--</span><span class="stat-unit">%</span></div>
+        <div class="stat-badge" id="humidity-badge">--</div>
+        <div class="stat-delta" id="humidity-change-wrap"><span id="humidity-arrow">—</span>&nbsp;<span id="humidity-change">--</span></div>
+      </div>
+
+      <div class="stat-card heat-card">
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+        <div class="stat-icon">🔥</div>
+        <div class="stat-label">HEAT INDEX</div>
+        <div class="stat-value"><span id="heatIndex">--</span><span class="stat-unit">°C</span></div>
+        <div class="stat-badge" id="comfort-level">FEELS LIKE</div>
+        <div class="stat-delta">Atmospheric Threat Level</div>
+      </div>
+
+      <div class="stat-card status-card">
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+        <div class="stat-icon">⚡</div>
+        <div class="stat-label">READINGS TODAY</div>
+        <div class="stat-value"><span id="recordCount">0</span></div>
+        <div class="stat-badge">Every 3 seconds</div>
+        <div class="stat-delta">Updated: <span id="lastUpdate">--</span></div>
+      </div>
+    </div>
+
+    <!-- ── DATA BAR ── -->
     <div class="data-bar">
-      <div class="timestamp-panel">
-        <span class="ts-icon">🕐</span>
-        <div class="ts-info">
-          <span class="ts-label">Last Reading</span>
-          <span class="ts-value" id="fullTimestamp">-- / -- / ----  --:--:-- --</span>
+      <div class="data-bar-left">
+        <span class="data-icon">📡</span>
+        <div class="data-info">
+          <span class="data-label">LAST IMPERIAL READING</span>
+          <span class="data-value" id="fullTimestamp">-- / -- / ---- &nbsp;--:--:-- --</span>
         </div>
-        <div class="ts-divider"></div>
-        <div class="ts-info">
-          <span class="ts-label">Records Logged</span>
-          <span class="ts-value" id="recordCount">0</span>
+        <div class="data-sep"></div>
+        <div class="data-info">
+          <span class="data-label">SYSTEM STATUS</span>
+          <span class="data-value" id="systemStatus">AWAITING ORDER 66</span>
         </div>
       </div>
-      <button class="export-btn" id="exportBtn" onclick="exportCSV()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Export CSV
-      </button>
+      <div class="data-bar-right">
+        <button class="audio-btn" id="audioBtn" onclick="toggleAudio()">
+          <span id="audioIcon">🔊</span>&nbsp;IMPERIAL MARCH
+        </button>
+        <button class="export-btn" id="exportBtn" onclick="exportCSV()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          &nbsp;EXPORT CSV
+        </button>
+      </div>
     </div>
 
     <!-- ── CHARTS ── -->
     <div class="charts-section">
       <div class="chart-card">
         <div class="chart-header">
-          <h3 class="chart-title">🌡️ Temperature Trend</h3>
+          <h3 class="chart-title">🌡️ TEMPERATURE HISTORY</h3>
           <span class="chart-period">Last 20 Readings</span>
         </div>
         <canvas id="tempChart"></canvas>
         <div class="chart-labels">
-          <span class="chart-label-dot" style="background:#ff6b6b;"></span>
+          <span class="chart-dot" style="background:#ff3333;"></span>
           <span class="chart-label-text">Temperature °C</span>
-          <span class="chart-label-live">● LIVE</span>
+          <span class="live-badge">● LIVE</span>
         </div>
       </div>
       <div class="chart-card">
         <div class="chart-header">
-          <h3 class="chart-title">💧 Humidity Trend</h3>
+          <h3 class="chart-title">💧 HUMIDITY HISTORY</h3>
           <span class="chart-period">Last 20 Readings</span>
         </div>
         <canvas id="humidityChart"></canvas>
         <div class="chart-labels">
-          <span class="chart-label-dot" style="background:#4facfe;"></span>
+          <span class="chart-dot" style="background:#ffe81f;"></span>
           <span class="chart-label-text">Humidity %</span>
-          <span class="chart-label-live">● LIVE</span>
+          <span class="live-badge">● LIVE</span>
         </div>
       </div>
+    </div>
+
+    <!-- ── COMBINED CHART ── -->
+    <div class="chart-card combined-card">
+      <div class="chart-header">
+        <h3 class="chart-title">⚡ TEMPERATURE &amp; HUMIDITY — COMBINED</h3>
+        <div style="display:flex;gap:.6rem;align-items:center;">
+          <span class="chart-period">Last 20 readings</span>
+          <button class="pause-btn" id="pauseBtn" onclick="togglePause()">⏸ PAUSE</button>
+        </div>
+      </div>
+      <canvas id="combinedChart"></canvas>
     </div>
 
     <!-- ── DEVICE INFO ── -->
     <div class="device-info">
       <div class="device-header">
-        <div class="device-status"></div>
-        <h3 class="device-title">Device Information</h3>
+        <div class="device-dot"></div>
+        <h3 class="device-title">IMPERIAL SENSOR UNIT — DEVICE INTELLIGENCE</h3>
       </div>
       <div class="device-grid">
         <div class="device-item"><span class="device-label">Microcontroller</span><span class="device-value">ESP32</span></div>
-        <div class="device-item"><span class="device-label">Sensor</span><span class="device-value">DHT11</span></div>
+        <div class="device-item"><span class="device-label">Sensor Module</span><span class="device-value">DHT11</span></div>
         <div class="device-item"><span class="device-label">Firmware</span><span class="device-value">v2.1.0</span></div>
         <div class="device-item"><span class="device-label">Uptime</span><span class="device-value" id="uptime">--</span></div>
         <div class="device-item"><span class="device-label">WiFi Signal</span><span class="device-value" id="wifiSignal">--</span></div>
         <div class="device-item"><span class="device-label">IP Address</span><span class="device-value" id="ipAddress">--</span></div>
       </div>
     </div>
+
+    <!-- ── FOOTER ── -->
+    <footer class="imperial-footer">
+      <span>⚡ IMPERIAL METEOROLOGICAL DIVISION · CLASS II ATMOSPHERIC DROID ⚡</span>
+      <span id="footerNote">♪ Imperial March standing by</span>
+    </footer>
 
   </div>
 
